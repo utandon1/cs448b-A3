@@ -1,0 +1,306 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <title>CS 448B Assignment 3</title>
+  </head>
+  <body style="font-family:Helvetica;">
+
+  <h3>South Bay Restaurants and Inspection Scores Visualization (by Utkarsh Tandon)</h3>
+
+  Update Selection Radii:
+
+  A: <input type="range" name="sliderA" id="Aslider" class="slider" min="20" max="500" value="100">
+  B: <input type="range" name="sliderB" id="Bslider" class="slider" min="20" max="500" value="100">
+
+     Filter by Inspection Score:
+  <input type="text" name="min" id="minInput" placeholder="Min Score" size=10>
+  <input type="text" name="max" id="maxInput" placeholder="Max Score" size=10>
+  <button type="submit" id="scoreUpdate">Go</button>
+
+  <p id="rangeText">Current Score Range [0-100]</p>
+
+  Intersection Query Output: <textarea id="outputText"></textarea>
+
+  <div></div>
+
+
+    
+  </body>
+
+  <script type="text/javascript">
+
+    // Set up size
+    var mapWidth = 1000;
+    var mapHeight = 750;
+
+    // Set up projection that the map is using
+    var scale = 190000;
+    var projection = d3.geoMercator()
+      .center([-122.061578, 37.385532]) 
+      .scale(scale)
+      .translate([mapWidth / 2, mapHeight / 2]);
+
+    // This is the mapping between <longitude, latitude> position to <x, y> pixel position on the map
+    // projection is a function and it has an inverse:
+    // projection([lon, lat]) returns [x, y]
+    // projection.invert([x, y]) returns [lon, lat]
+
+    // Add an SVG element to the DOM
+    var svg = d3.select('body').append('svg')
+      .attr('width', mapWidth)
+      .attr('height', mapHeight);
+
+    // Add SVG map at correct size, assuming map is saved in a subdirectory called `data`
+    svg.append('image')
+      .attr('width', mapWidth)
+      .attr('height', mapHeight)
+      .attr('xlink:href', 'map.svg');
+
+
+
+    d3.csv("https://gist.githubusercontent.com/utkarshtandon/e4a9c3432b89feadd3dc65262afe676b/raw/328355c0c5e9306e453e837648717bb03fe2ee33/data.csv").then(function(data) {
+
+      var queryList = [];
+
+      console.log(data);
+
+      var stores = svg.append("g")
+           .attr("id", "stores")
+           .selectAll("circle")
+           .data(data)
+           .enter()
+           .append("circle")
+           .attr("cx", function(d) {
+              var projectedLocation = projection([parseFloat(d.Longitude), parseFloat(d.Latitude)]);
+              return projectedLocation[0];
+           })
+           .attr("cy", function(d) {
+              var projectedLocation = projection([parseFloat(d.Longitude), parseFloat(d.Latitude)]);
+              return projectedLocation[1];
+           })
+           .attr("r", 2)
+           .attr("fill", "gray")
+           .attr("visibility", "visible")
+           .on("mouseover", function(e,d){return tooltip.style("visibility", "visible").style("left", (e.pageX + 10) + "px").style("top", (e.pageY - 10) + "px").html(d.Name + " <br/> Score: "  + d.Score)})
+           .on("mouseout", function(e,d){return tooltip.style("visibility", "hidden")});
+
+
+      var Bproj = projection([-122.041578, 37.365532]);
+      var Aproj = projection([-122.111578, 37.405532]);
+
+      var Apos = {x:Aproj[0],y:Aproj[1],r:100}
+      var Bpos = {x:Bproj[0],y:Bproj[1],r:100}
+
+
+      var circles = [{x:Aproj[0],y:Aproj[1],id:"A",r:100},{x:Bproj[0],y:Bproj[1],id:"B", r:100}]
+
+
+      var circle = svg.append("g")
+        .attr("id", "selectionCircles")
+        .selectAll("circle")
+        .data(circles)
+        .enter().append("circle")
+          .attr("cx", function (d) { return d.x; })
+          .attr("cy", function (d) { return d.y; })
+          .attr("r", function (d) { return d.r; })
+          .attr("id", function (d) { return d.id; })
+          .style("stroke", "blue")
+          .style("stroke-width", 3)
+          .style("fill", "none")
+          .on("mouseover", function (d) {d3.select(this).style("cursor", "move");})
+          .on("mouseout", function (d) {})
+          .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended)
+                );
+      
+      var textA = svg.append("text")
+          .attr("dx", function(d){
+            return d3.select("#A").attr("cx") - 3;
+          })
+          .attr("dy", function(d){
+            return d3.select("#A").attr("cy") + 20;
+          })
+          .attr("id", "textA")
+          .style("fill", "blue")
+          .style("font-size", 15)
+          .text("A");
+
+
+      var textB = svg.append("text")
+          .attr("dx", function(d){
+            return d3.select("#B").attr("cx") - 3;
+          })
+          .attr("dy", function(d){
+            return d3.select("#B").attr("cy") + 20;
+          })
+          .attr("id", "textB")
+          .style("fill", "blue")
+          .style("font-size", 15)
+          .text("B");
+
+
+
+
+      function dragstarted(d) {
+          d3.select(this).raise().classed("active", true);
+      }
+
+      function dragged(e, d) {
+          d3.select(this).attr("cx", d.x = e.x).attr("cy", d.y = e.y);
+          var id = d3.select(this).attr("id");
+          if (id == "A"){
+            Apos.x = e.x;
+            Apos.y = e.y;
+            d3.select("#textA").attr("dx", e.x - 3).attr("dy", e.y);;
+          } else {
+            Bpos.x = e.x;
+            Bpos.y = e.y;
+            d3.select("#textB").attr("dx", e.x - 3).attr("dy", e.y);
+          }
+      }
+
+      function dragended(d) {
+          d3.select(this).classed("active", false);
+
+          queryList = [];
+
+          stores
+                .style("fill", function(d) {
+                    var cx = d3.select(this).attr("cx");
+                    var cy = d3.select(this).attr("cy");
+                    var Adist = Math.sqrt( Math.pow((cx-Apos.x), 2) + Math.pow((cy-Apos.y), 2) );
+                    var Bdist = Math.sqrt( Math.pow((cx-Bpos.x), 2) + Math.pow((cy-Bpos.y), 2) );
+                    if (Adist < Apos.r && Bdist < Bpos.r) {
+                      if (d3.select(this).style("visibility") == "visible") {
+                        queryList.push(d.Name);
+                      }
+                      return "red";
+                    } else {
+                      return "gray";
+                    }
+                })
+
+          textA
+               .attr("dx", function(d){
+                  return d3.select("#A").attr("cx") - 3;
+                })
+                .attr("dy", function(d){
+                  return d3.select("#A").attr("cy") + 20;
+                })
+
+          textB
+               .attr("dx", function(d){
+                  return d3.select("#B").attr("cx") - 3;
+                })
+                .attr("dy", function(d){
+                  return d3.select("#B").attr("cy") + 20;
+                })
+
+          d3.select("#outputText").html(queryList.join("\n"));
+      }
+
+      function updateSize(value, id) {
+
+        circle
+            .attr("r", function (d) { 
+                var cid = d3.select(this).attr("id");
+                var cr = d3.select(this).attr("r");
+                if (cid == id) {
+                  return value;
+                } else {
+                  return cr;
+                }
+            })
+
+        if (id == "A"){
+          Apos.r = value;
+        } else {
+          Bpos.r = value;
+        }
+
+        queryList = [];
+
+        stores
+              .style("fill", function(d) {
+                  var cx = d3.select(this).attr("cx");
+                  var cy = d3.select(this).attr("cy");
+                  var Adist = Math.sqrt( Math.pow((cx-Apos.x), 2) + Math.pow((cy-Apos.y), 2) );
+                  var Bdist = Math.sqrt( Math.pow((cx-Bpos.x), 2) + Math.pow((cy-Bpos.y), 2) );
+                  if (Adist < Apos.r && Bdist < Bpos.r) {
+                    if (d3.select(this).style("visibility") == "visible") {
+                      queryList.push(d.Name);
+                    }
+                    return "red";
+                  } else {
+                    return "gray";
+                  }
+              })
+
+        d3.select("#outputText").html(queryList.join("\n"));
+
+      }
+
+      function scoreChange(){
+          var minScore = d3.select("#minInput").node().value;
+          var maxScore = d3.select("#maxInput").node().value;
+
+          queryList = [];
+
+          if (isNaN(minScore) || isNaN(maxScore) || parseInt(minScore) > parseInt(maxScore) || parseInt(minScore) < 0 || parseInt(minScore) > 100 || parseInt(maxScore) < 0 || parseInt(maxScore) > 100) {
+            alert ("Range must be valid numbers between 0 - 100 where Min score is less than Max score");
+          } else {
+            var min = parseInt(minScore);
+            var max = parseInt(maxScore);
+
+
+
+            stores
+              .style("visibility", function(d) {
+                  if (d.Score >= min && d.Score <= max) {
+                    if (d3.select(this).style("fill") == "red") {
+                      queryList.push(d.Name);
+                    }
+                    return "visible";
+                  } else {
+                    return "hidden";
+                  }
+              });
+
+            d3.select("#rangeText").text("Current Score Range [" + minScore + "-" + maxScore + "]");
+
+            d3.select("#outputText").html(queryList.join("\n"));
+          }
+      }
+
+
+      dropdown = d3.select("#scoreUpdate")
+            .on("click", scoreChange);
+
+
+
+      // Listen to the slider?
+      d3.selectAll(".slider")
+        .on("change", function(d){
+          updateSize(this.value, this.id[0]);
+        })
+        
+      // Create Tooltip and set it to be hidden   
+      var tooltip = d3.select("body")
+          .append("div")
+          .style("position", "absolute")
+          .style("font-family", "'Open Sans', sans-serif")
+          .style("font-size", "12px")
+          .style("z-index", "10")
+          .style("color", "black")
+          .style("visibility", "hidden")
+    });
+    
+
+  </script>
+</html>
+
